@@ -9,7 +9,6 @@
 
 #include <Poller.h>
 #include <Triac.h>
-#include <driver/mcpwm.h>
 #include <limero.h>
 #include <stdio.h>
 
@@ -19,41 +18,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
-bool pwmInit(mcpwm_unit_t mcpwmUnit, mcpwm_timer_t mcpwmTimer, int pinPwm,
-             int pinSync, float pwm, uint32_t frequency) {
-  INFO(" MCPWM init PCPWM[%d] TIMER[%d] pin PWM : %d, pin SYNC : %d ",
-       mcpwmUnit, mcpwmTimer, pinPwm, pinSync);
-  esp_err_t _rc = mcpwm_gpio_init(mcpwmUnit, MCPWM0A, pinPwm);
-  if (_rc) {
-    WARN("mcpwm_gpio_init()=%d", _rc);
-    return false;
-  };
-  if (pinSync) {
-    _rc = mcpwm_gpio_init(mcpwmUnit, MCPWM_SYNC_0, pinSync);
-    if (_rc) {
-      WARN("mcpwm_gpio_init()=%d", _rc);
-      return false;
-    };
-  }
-  mcpwm_config_t mcpwmConfig = {.frequency = frequency,
-                                .cmpr_a = pwm,
-                                .cmpr_b = 0.0,
-                                .duty_mode = MCPWM_DUTY_MODE_0,
-                                .counter_mode = MCPWM_UP_COUNTER};
-  _rc = mcpwm_init(mcpwmUnit, mcpwmTimer, &mcpwmConfig);
-  if (_rc) {
-    WARN("mcpwm_init()=%d", _rc);
-    return false;
-  };
-  if (pinSync) {
-    _rc = mcpwm_sync_enable(mcpwmUnit, mcpwmTimer, MCPWM_SELECT_SYNC0, 750);
-    if (_rc) {
-      WARN("mcpwm_sync_enable()=%d", _rc);
-      return false;
-    };
-  }
-  return true;
-}
 
 Log logger(1024);
 // ---------------------------------------------- THREAD
@@ -91,7 +55,9 @@ ValueSource<bool> systemAlive = true;
 
 Poller poller(mqttThread);
 
-TimerSource ticker(workerThread, 10, true);
+#include <UltraSonic.h>
+Connector uextUs(2);
+UltraSonic ultrasonic(thisThread, &uextUs);
 
 extern "C" void app_main(void) {
 #ifdef HOSTNAME
@@ -122,21 +88,18 @@ extern "C" void app_main(void) {
   mqtt.connected >> led.blinkSlow;
   mqtt.connected >> poller.connected;
   //------------------------------------------------------------------- TRIAC
-  /*if (triac.init()) {
+  if (triac.init()) {
     triac.interrupts >> mqtt.toTopic<uint64_t>("triac/interrupts");
     triac.current >> mqtt.toTopic<int>("triac/current");
+    poller >> triac.phase;
+    mqtt.topic<int>("triac/phase") == triac.phase;
   } else {
     WARN(" TRIAC initilaization failed. ");
-  }*/
+  }
+  ultrasonic.init();
+  ultrasonic.distance >> mqtt.toTopic<int32_t>("us/distance");
   //------------------------------------------------------------------- PWM
-  pwmInit(MCPWM_UNIT_0, MCPWM_TIMER_0, 19, 25, 1.0, 100);
-  pwmInit(MCPWM_UNIT_1, MCPWM_TIMER_0, 22, 0, 50.0, 100);
-  ticker >> [](const TimerMsg& tm) {
-    static int phase = 0;
-    mcpwm_sync_enable(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_SELECT_SYNC0, 1000-phase);
-    phase += 1;
-    if (phase >= 1000) phase = 0;
-  };
+
   ledThread.start();
   mqttThread.start();
   workerThread.start();

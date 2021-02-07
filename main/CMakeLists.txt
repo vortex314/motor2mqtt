@@ -1,2 +1,2 @@
 idf_component_register(SRCS main.cpp LedBlinker.cpp
-                    INCLUDE_DIRS ../../limero/inc ../components/triac )
+                    INCLUDE_DIRS ../../limero/inc ../components/ultrasonic ../components/triac  )

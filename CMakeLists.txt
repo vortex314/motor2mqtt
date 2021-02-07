@@ -6,7 +6,7 @@ set(WIFI_SSID $ENV{WIFI_SSID})
 set(WIFI_PASS $ENV{WIFI_PASS})
 set(ESPBAUD 921600) # doesn't work
 
-include_directories(main   )
+include_directories( main   )
 add_definitions(-DWIFI_PASS=${WIFI_PASS} -DWIFI_SSID=${WIFI_SSID} -DESP32_IDF -DMQTT_HOST=limero.ddns.net -DMQTT_PORT=1883 -DHOSTNAME=triac)
 # add_compile_options( -mtext-section-literals -ffunction-sections )
 

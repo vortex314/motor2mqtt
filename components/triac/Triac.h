@@ -19,6 +19,6 @@ class Triac : public Actor {
   Triac(Thread&, Connector&);
   bool init();
   ValueSource<int> current;
-  ValueFlow<int> angle;
+  ValueFlow<int> phase;
   ValueSource<uint64_t> interrupts;
 };
