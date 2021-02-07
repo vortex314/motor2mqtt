@@ -7,57 +7,53 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
+#include <Poller.h>
+#include <Triac.h>
+#include <driver/mcpwm.h>
 #include <limero.h>
 #include <stdio.h>
 
+#include "LedBlinker.h"
 #include "esp_spi_flash.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
-
-//____________________________________________________________________________________
-//
-class Poller : public Actor {
-  TimerSource _pollInterval;
-  std::vector<Requestable *> _requestables;
-  uint32_t _idx = 0;
-
- public:
-  ValueFlow<bool> connected;
-  ValueFlow<uint32_t> interval = 500;
-  Poller(Thread &t) : Actor(t), _pollInterval(t, 500, true) {
-    _pollInterval >> [&](const TimerMsg tm) {
-      if (_requestables.size() && connected())
-        _requestables[_idx++ % _requestables.size()]->request();
-    };
-    interval >> [&](const uint32_t iv) { _pollInterval.interval(iv); };
+bool pwmInit(mcpwm_unit_t mcpwmUnit, mcpwm_timer_t mcpwmTimer, int pinPwm,
+             int pinSync, float pwm, uint32_t frequency) {
+  INFO(" MCPWM init PCPWM[%d] TIMER[%d] pin PWM : %d, pin SYNC : %d ",
+       mcpwmUnit, mcpwmTimer, pinPwm, pinSync);
+  esp_err_t _rc = mcpwm_gpio_init(mcpwmUnit, MCPWM0A, pinPwm);
+  if (_rc) {
+    WARN("mcpwm_gpio_init()=%d", _rc);
+    return false;
   };
-
-  template <class T>
-  LambdaSource<T> &operator>>(LambdaSource<T> &source) {
-    _requestables.push_back(&source);
-    return source;
+  if (pinSync) {
+    _rc = mcpwm_gpio_init(mcpwmUnit, MCPWM_SYNC_0, pinSync);
+    if (_rc) {
+      WARN("mcpwm_gpio_init()=%d", _rc);
+      return false;
+    };
   }
-
-  template <class T>
-  ValueSource<T> &operator>>(ValueSource<T> &source) {
-    _requestables.push_back(&source);
-    return source;
+  mcpwm_config_t mcpwmConfig = {.frequency = frequency,
+                                .cmpr_a = pwm,
+                                .cmpr_b = 0.0,
+                                .duty_mode = MCPWM_DUTY_MODE_0,
+                                .counter_mode = MCPWM_UP_COUNTER};
+  _rc = mcpwm_init(mcpwmUnit, mcpwmTimer, &mcpwmConfig);
+  if (_rc) {
+    WARN("mcpwm_init()=%d", _rc);
+    return false;
+  };
+  if (pinSync) {
+    _rc = mcpwm_sync_enable(mcpwmUnit, mcpwmTimer, MCPWM_SELECT_SYNC0, 750);
+    if (_rc) {
+      WARN("mcpwm_sync_enable()=%d", _rc);
+      return false;
+    };
   }
-
-  template <class T>
-  ValueFlow<T> &operator>>(ValueFlow<T> &source) {
-    _requestables.push_back(&source);
-    return source;
-  }
-
-  template <class T>
-  RefSource<T> &operator>>(RefSource<T> &source) {
-    _requestables.push_back(&source);
-    return source;
-  }
-};
+  return true;
+}
 
 Log logger(1024);
 // ---------------------------------------------- THREAD
@@ -71,9 +67,7 @@ ThreadProperties props = {.name = "worker",
 Thread workerThread(props);
 #define PIN_LED 2
 
-#include "LedBlinker.h"
 LedBlinker led(ledThread, PIN_LED, 100);
-#include <Triac.h>
 Connector uextTriac(1);
 Triac triac(workerThread, uextTriac);
 
@@ -89,22 +83,27 @@ MqttOta mqttOta;
 #endif
 
 // ---------------------------------------------- system properties
-ValueSource<std::string> systemBuild("NOT SET");
-ValueSource<std::string> systemHostname("NOT SET");
-ValueSource<bool> systemAlive = true;
+LambdaSource<std::string> systemBuild([]() { return __DATE__ " " __TIME__; });
+LambdaSource<std::string> systemHostname([]() { return Sys::hostname(); });
 LambdaSource<uint32_t> systemHeap([]() { return Sys::getFreeHeap(); });
 LambdaSource<uint64_t> systemUptime([]() { return Sys::millis(); });
+ValueSource<bool> systemAlive = true;
 
 Poller poller(mqttThread);
-// TODO: Sys::hostname() auto generated if not set in ESP32
+
+TimerSource ticker(workerThread, 10, true);
 
 extern "C" void app_main(void) {
 #ifdef HOSTNAME
   Sys::hostname(S(HOSTNAME));
 #endif
-  systemHostname = Sys::hostname();
-  systemBuild = __DATE__ " " __TIME__;
-  INFO("%s : %s ", Sys::hostname(), systemBuild().c_str());
+  INFO("%s : %s ", systemHostname().c_str(), systemBuild().c_str());
+  //-----------------------------------------------------------------  SYS props
+  poller >> systemUptime >> mqtt.toTopic<uint64_t>("system/upTime");
+  poller >> systemHeap >> mqtt.toTopic<uint32_t>("system/heap");
+  poller >> systemHostname >> mqtt.toTopic<std::string>("system/hostname");
+  poller >> systemBuild >> mqtt.toTopic<std::string>("system/build");
+  poller >> systemAlive >> mqtt.toTopic<bool>("system/alive");
 
 #ifdef MQTT_SERIAL
   mqtt.init();
@@ -122,21 +121,22 @@ extern "C" void app_main(void) {
   led.init();
   mqtt.connected >> led.blinkSlow;
   mqtt.connected >> poller.connected;
-  //-----------------------------------------------------------------  SYS props
-  poller >> systemUptime >> mqtt.toTopic<uint64_t>("system/upTime");
-  poller >> systemHeap >> mqtt.toTopic<uint32_t>("system/heap");
-  poller >> systemHostname >> mqtt.toTopic<std::string>("system/hostname");
-  poller >> systemBuild >> mqtt.toTopic<std::string>("system/build");
-  poller >> systemAlive >> mqtt.toTopic<bool>("system/alive");
-
   //------------------------------------------------------------------- TRIAC
-  if (triac.init()) {
+  /*if (triac.init()) {
     triac.interrupts >> mqtt.toTopic<uint64_t>("triac/interrupts");
     triac.current >> mqtt.toTopic<int>("triac/current");
   } else {
     WARN(" TRIAC initilaization failed. ");
-  }
-
+  }*/
+  //------------------------------------------------------------------- PWM
+  pwmInit(MCPWM_UNIT_0, MCPWM_TIMER_0, 19, 25, 1.0, 100);
+  pwmInit(MCPWM_UNIT_1, MCPWM_TIMER_0, 22, 0, 50.0, 100);
+  ticker >> [](const TimerMsg& tm) {
+    static int phase = 0;
+    mcpwm_sync_enable(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_SELECT_SYNC0, 1000-phase);
+    phase += 1;
+    if (phase >= 1000) phase = 0;
+  };
   ledThread.start();
   mqttThread.start();
   workerThread.start();

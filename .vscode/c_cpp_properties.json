@@ -8,9 +8,8 @@
                 "${workspaceFolder}/../limero/inc",
                 "${workspaceFolder}/../limero/esp32_idf",
                 "${workspaceFolder}/../ArduinoJson/src/",
-                "${HOME}/esp/esp-idf/**",
-                "/home/lieven/esp/esp-idf/components/freertos/include/freertos",
                 "${HOME}/esp/esp-idf/components/**",
+                "${HOME}/esp/esp-idf/components/freertos/include/freertos/",
                 "${HOME}/esp/xtensa-esp32-elf/**",
                 "${HOME}/esp/esp-idf/components/wpa_supplicant/port/include/",
                 "${HOME}/.espressif/tools/xtensa-esp32-elf/**"

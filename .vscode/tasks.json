@@ -19,7 +19,9 @@
                 "panel": "shared"
             },
             "args": [
-                "flash"
+                "flash",
+                "ESPBAUD=921600",
+                "MONITORBAUD=115200"
             ],
             "problemMatcher": {
                 "owner": "cpp",
