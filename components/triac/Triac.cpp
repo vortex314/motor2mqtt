@@ -33,7 +33,7 @@ Triac::Triac(Thread& thread, Connector& uext)
       _adcCurrent(uext.getADC(LP_RXD)),
       _gpioTrigger(uext.getDigitalOut(LP_TXD)),  // RXD ?
       _measureTimer(thread, 1000, true) {
-  _gpioZeroDetect.onChange(DigitalIn::DIN_CHANGE, zeroDetected, this);
+  _gpioZeroDetect.onChange(DigitalIn::DIN_RAISE, zeroDetected, this);
   _gpioTrigger.setMode(DigitalOut::DOUT_PULL_DOWN);
 
   _measureTimer >> [&](const TimerMsg& tm) {

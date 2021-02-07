@@ -64,7 +64,11 @@ Log logger(1024);
 Thread thisThread("main");
 Thread ledThread("led");
 Thread mqttThread("mqtt");
-Thread workerThread("worker");
+ThreadProperties props = {.name = "worker",
+                          .stackSize = 5000,
+                          .queueSize = 20,
+                          .priority = 24 | portPRIVILEGE_BIT};
+Thread workerThread(props);
 #define PIN_LED 2
 
 #include "LedBlinker.h"
