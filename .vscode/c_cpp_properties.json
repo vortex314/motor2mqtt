@@ -4,9 +4,9 @@
             "name": "ESP32",
             "includePath": [
                 "${workspaceFolder}/main",
-                "${workspaceFolder}/components/**",
-                "${workspaceFolder}/build/include",
+                "${workspaceFolder}/components/triac",
                 "${workspaceFolder}/../limero/inc",
+                "${workspaceFolder}/../limero/esp32_idf",
                 "${workspaceFolder}/../ArduinoJson/src/",
                 "${HOME}/esp/esp-idf/**",
                 "/home/lieven/esp/esp-idf/components/freertos/include/freertos",
@@ -27,7 +27,8 @@
             "cStandard": "c11",
             "cppStandard": "c++11",
             "intelliSenseMode": "clang-x64",
-            "forcedInclude": []
+            "forcedInclude": [],
+            "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
     "version": 4

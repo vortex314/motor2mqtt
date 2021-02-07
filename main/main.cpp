@@ -10,7 +10,6 @@
 #include <limero.h>
 #include <stdio.h>
 
-#include "LedBlinker.h"
 #include "esp_spi_flash.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -68,7 +67,11 @@ Thread mqttThread("mqtt");
 Thread workerThread("worker");
 #define PIN_LED 2
 
-LedBlinker led(ledThread, PIN_LED, 301);
+#include "LedBlinker.h"
+LedBlinker led(ledThread, PIN_LED, 100);
+#include <Triac.h>
+Connector uextTriac(1);
+Triac triac(workerThread, uextTriac);
 
 #ifdef MQTT_SERIAL
 #include <MqttSerial.h>
@@ -87,22 +90,13 @@ ValueSource<std::string> systemHostname("NOT SET");
 ValueSource<bool> systemAlive = true;
 LambdaSource<uint32_t> systemHeap([]() { return Sys::getFreeHeap(); });
 LambdaSource<uint64_t> systemUptime([]() { return Sys::millis(); });
+
 Poller poller(mqttThread);
+// TODO: Sys::hostname() auto generated if not set in ESP32
 
 extern "C" void app_main(void) {
 #ifdef HOSTNAME
   Sys::hostname(S(HOSTNAME));
-#else
-  std::string hn;
-  union {
-    uint8_t macBytes[6];
-    uint64_t macInt;
-  };
-  macInt = 0L;
-  if (esp_read_mac(macBytes, ESP_MAC_WIFI_STA) != ESP_OK)
-    WARN(" esp_base_mac_addr_get() failed.");
-  string_format(hn, "ESP32-%d", macInt & 0xFFFF);
-  Sys::hostname(hn.c_str());
 #endif
   systemHostname = Sys::hostname();
   systemBuild = __DATE__ " " __TIME__;
@@ -110,10 +104,6 @@ extern "C" void app_main(void) {
 
 #ifdef MQTT_SERIAL
   mqtt.init();
-#ifdef ECHOTEST
-  echoTest.init();
-#endif
-
 #else
   wifi.init();
   mqtt.init();
@@ -134,6 +124,14 @@ extern "C" void app_main(void) {
   poller >> systemHostname >> mqtt.toTopic<std::string>("system/hostname");
   poller >> systemBuild >> mqtt.toTopic<std::string>("system/build");
   poller >> systemAlive >> mqtt.toTopic<bool>("system/alive");
+
+  //------------------------------------------------------------------- TRIAC
+  if (triac.init()) {
+    triac.interrupts >> mqtt.toTopic<uint64_t>("triac/interrupts");
+    triac.current >> mqtt.toTopic<int>("triac/current");
+  } else {
+    WARN(" TRIAC initilaization failed. ");
+  }
 
   ledThread.start();
   mqttThread.start();
