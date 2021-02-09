@@ -8,6 +8,7 @@
 */
 
 #include <Poller.h>
+#include <Tacho.h>
 #include <Triac.h>
 #include <limero.h>
 #include <stdio.h>
@@ -34,6 +35,8 @@ Thread workerThread(props);
 LedBlinker led(ledThread, PIN_LED, 100);
 Connector uextTriac(1);
 Triac triac(workerThread, uextTriac);
+Connector uextTacho(2);
+Tacho tacho(workerThread, uextTacho.toPin(LP_MISO));
 
 #ifdef MQTT_SERIAL
 #include <MqttSerial.h>
@@ -88,16 +91,17 @@ extern "C" void app_main(void) {
   mqtt.connected >> led.blinkSlow;
   mqtt.connected >> poller.connected;
   //------------------------------------------------------------------- TRIAC
-  if (triac.init()) {
+  if (triac.init() && tacho.init()) {
     triac.interrupts >> mqtt.toTopic<uint64_t>("triac/interrupts");
     triac.current >> mqtt.toTopic<int>("triac/current");
+    tacho.rpm >> mqtt.toTopic<uint32_t>("tacho/rpm");
     poller >> triac.phase;
     mqtt.topic<int>("triac/phase") == triac.phase;
   } else {
-    WARN(" TRIAC initilaization failed. ");
+    WARN(" TRIAC initialization failed. ");
   }
-  ultrasonic.init();
-  ultrasonic.distance >> mqtt.toTopic<int32_t>("us/distance");
+  // ultrasonic.init();
+  // ultrasonic.distance >> mqtt.toTopic<int32_t>("us/distance");
   //------------------------------------------------------------------- PWM
 
   ledThread.start();
