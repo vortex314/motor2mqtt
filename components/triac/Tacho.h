@@ -10,8 +10,11 @@ class Tacho : public Actor {
   mcpwm_unit_t _mcpwm_num;
 
   TimerSource _reportTimer;
-  uint64_t _isrCounter;
+  uint32_t _isrCounter;
+  uint32_t _prevIsrCounter;
   uint32_t _capture;
+  uint32_t _prevCapture;
+  uint32_t _prevRpm;
 
  public:
   ValueSource<uint32_t> rpm;

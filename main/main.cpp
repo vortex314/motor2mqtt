@@ -33,9 +33,9 @@ Thread workerThread(props);
 #define PIN_LED 2
 
 LedBlinker led(ledThread, PIN_LED, 100);
-Connector uextTriac(1);
+Uext uextTriac(1);
 Triac triac(workerThread, uextTriac);
-Connector uextTacho(2);
+Uext uextTacho(2);
 Tacho tacho(workerThread, uextTacho.toPin(LP_MISO));
 
 #ifdef MQTT_SERIAL
@@ -57,23 +57,15 @@ LambdaSource<uint64_t> systemUptime([]() { return Sys::millis(); });
 ValueSource<bool> systemAlive = true;
 
 Poller poller(mqttThread);
-
+/*
 #include <UltraSonic.h>
-Connector uextUs(2);
+Uext uextUs(2);
 UltraSonic ultrasonic(thisThread, &uextUs);
-
+*/
 extern "C" void app_main(void) {
 #ifdef HOSTNAME
   Sys::hostname(S(HOSTNAME));
 #endif
-  INFO("%s : %s ", systemHostname().c_str(), systemBuild().c_str());
-  //-----------------------------------------------------------------  SYS props
-  poller >> systemUptime >> mqtt.toTopic<uint64_t>("system/upTime");
-  poller >> systemHeap >> mqtt.toTopic<uint32_t>("system/heap");
-  poller >> systemHostname >> mqtt.toTopic<std::string>("system/hostname");
-  poller >> systemBuild >> mqtt.toTopic<std::string>("system/build");
-  poller >> systemAlive >> mqtt.toTopic<bool>("system/alive");
-
 #ifdef MQTT_SERIAL
   mqtt.init();
 #else
@@ -87,11 +79,20 @@ extern "C" void app_main(void) {
   poller >> wifi.rssi >> mqtt.toTopic<int>("wifi/rssi");
   mqtt.blocks >> mqttOta.blocks;
 #endif
+  INFO("%s : %s ", systemHostname().c_str(), systemBuild().c_str());
+  //-----------------------------------------------------------------  SYS props
+  poller >> systemUptime >> mqtt.toTopic<uint64_t>("system/upTime");
+  poller >> systemHeap >> mqtt.toTopic<uint32_t>("system/heap");
+  poller >> systemHostname >> mqtt.toTopic<std::string>("system/hostname");
+  poller >> systemBuild >> mqtt.toTopic<std::string>("system/build");
+  poller >> systemAlive >> mqtt.toTopic<bool>("system/alive");
+
   led.init();
   mqtt.connected >> led.blinkSlow;
   mqtt.connected >> poller.connected;
   //------------------------------------------------------------------- TRIAC
   if (triac.init() && tacho.init()) {
+    INFO(" triac and tacho init succesful.");
     triac.interrupts >> mqtt.toTopic<uint64_t>("triac/interrupts");
     triac.current >> mqtt.toTopic<int>("triac/current");
     tacho.rpm >> mqtt.toTopic<uint32_t>("tacho/rpm");

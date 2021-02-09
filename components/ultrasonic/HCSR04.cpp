@@ -10,7 +10,7 @@
 HCSR04::HCSR04(DigitalOut& triggerPin, DigitalIn& echoPin)
 	: _trigger(triggerPin), _echo(echoPin) {}
 
-HCSR04::HCSR04(Connector& connector)
+HCSR04::HCSR04(Uext& connector)
 	: _trigger(connector.getDigitalOut(LP_SCL)),
 	  _echo(connector.getDigitalIn(LP_SDA)) {}
 

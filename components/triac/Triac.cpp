@@ -64,7 +64,7 @@ IRAM_ATTR void Triac::zeroDetected(void* pv) {
   gpio_set_level((gpio_num_t)pTriac->_gpioTrigger.getPin(), 0);
 }
 */
-Triac::Triac(Thread& thread, Connector& uext)
+Triac::Triac(Thread& thread, Uext& uext)
     : Actor(thread),
       _gpioZeroDetect(uext.getDigitalIn(LP_SCL)),
       _adcCurrent(uext.getADC(LP_RXD)),
@@ -72,6 +72,9 @@ Triac::Triac(Thread& thread, Connector& uext)
       _measureTimer(thread, 1000, true) {
   pwmInit(MCPWM_UNIT_0, MCPWM_TIMER_0, _gpioTrigger.getPin(),
           _gpioZeroDetect.getPin(), 1.0, 100);
+  DigitalIn& sda = uext.getDigitalIn(LP_SDA);
+  sda.setMode(DigitalIn::DIN_NO_PULL);
+  sda.init();
   /*
     _gpioZeroDetect.onChange(DigitalIn::DIN_RAISE, zeroDetected, this);
     _gpioTrigger.setMode(DigitalOut::DOUT_PULL_DOWN);
@@ -87,12 +90,13 @@ Triac::Triac(Thread& thread, Connector& uext)
   _measureTimer >> [&](const TimerMsg& tm) {
     interrupts = _interrupts;
     current = _adcCurrent.getValue();
-    INFO("  delta zero min %d µsec,max %d µsec , interrupts : %ld", _minDelta,
-         _maxDelta, _interrupts);
+    INFO(
+        "  delta zero min %d µsec,max %d µsec , interrupts : %ld current : %d ",
+        _minDelta, _maxDelta, _interrupts, current());
     _minDelta = INT32_MAX;
     _maxDelta = INT32_MIN;
   };
-  phase.on(90);
+  phase.on(170);
 }
 
 bool Triac::init() {

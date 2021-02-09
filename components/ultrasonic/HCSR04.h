@@ -12,7 +12,7 @@ class HCSR04 {
   uint64_t _delta_usec;
 
  public:
-  HCSR04(Connector&);
+  HCSR04(Uext&);
   HCSR04(DigitalOut&, DigitalIn&);
   bool init();
   bool trigger();

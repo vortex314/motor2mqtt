@@ -16,7 +16,7 @@ class Triac : public Actor {
   void newZeroDetect();
 
  public:
-  Triac(Thread&, Connector&);
+  Triac(Thread&, Uext&);
   bool init();
   ValueSource<int> current;
   ValueFlow<int> phase;
