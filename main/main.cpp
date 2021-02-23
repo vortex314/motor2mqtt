@@ -96,8 +96,22 @@ extern "C" void app_main(void) {
     triac.interrupts >> mqtt.toTopic<uint64_t>("triac/interrupts");
     triac.current >> mqtt.toTopic<int>("triac/current");
     tacho.rpm >> mqtt.toTopic<uint32_t>("tacho/rpm");
+    tacho.rpm >> triac.rpmMeasured;
     poller >> triac.phase;
-    mqtt.topic<int>("triac/phase") == triac.phase;
+    mqtt.topic<float>("triac/phase") == triac.phase;
+    mqtt.topic<uint32_t>("triac/rpmTarget") == triac.rpmTarget;
+    mqtt.topic<float>("triac/KP")==triac.KP;
+    mqtt.topic<float>("triac/KI")==triac.KI;
+    mqtt.topic<float>("triac/KD")==triac.KD;
+    poller >> triac.rpmTarget;
+    poller >> triac.KP;
+    poller >> triac.KD;
+    poller >> triac.KI;
+    poller >> triac.rpmTarget;
+    triac.rpmMeasured >> mqtt.toTopic<uint32_t>("triac/rpmMeasured");
+    mqtt.topic<float>("triac/integral") == triac.integral;
+    triac.error >> mqtt.toTopic<int>("triac/error");
+
   } else {
     WARN(" TRIAC initialization failed. ");
   }

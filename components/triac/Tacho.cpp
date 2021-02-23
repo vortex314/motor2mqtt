@@ -18,7 +18,7 @@ single pole magnet
 static mcpwm_dev_t* MCPWM[2] = {&MCPWM0, &MCPWM1};
 
 Tacho::Tacho(Thread& thread, int pinTacho)
-    : Actor(thread), _pinTacho(pinTacho), _reportTimer(thread, 100, true) {
+    : Actor(thread), _pinTacho(pinTacho), _reportTimer(thread, 150, true) {
   _mcpwm_num = MCPWM_UNIT_1;
 };
 
@@ -57,7 +57,8 @@ bool Tacho::init() {
            CAPTURE_DIVIDER);  // _capture is ticks per rotation
       float rotationPerSec = 1.0 / secPerRotation;
       _prevIsrCounter = _isrCounter;
-      rpm = (rotationPerSec * 60)/POLES_TACHO;
+      uint32_t _rpm = (rotationPerSec * 60)/POLES_TACHO;
+      if ( _rpm < 20000 ) rpm = _rpm;
     } else {
       rpm = 0;
     }

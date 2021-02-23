@@ -3,22 +3,29 @@
 #include <limero.h>
 
 class Triac : public Actor {
-  DigitalIn& _gpioZeroDetect;
+  uint32_t _gpioZeroDetect;
+  uint32_t _gpioTriac;
   ADC& _adcCurrent;
-  DigitalOut& _gpioTrigger;
   TimerSource _measureTimer;
-  uint64_t _interrupts;
-  int32_t _maxDelta = INT32_MIN;
-  int32_t _minDelta = INT32_MAX;
-  uint64_t _lastZeroDetect;
+  TimerSource _controlTimer;
 
-  static void zeroDetected(void*);
-  void newZeroDetect();
+  float _errorPrev = 0.0;
+  float _interval = 0.1;
+
+  float pid(float e);
 
  public:
   Triac(Thread&, Uext&);
   bool init();
   ValueSource<int> current;
-  ValueFlow<int> phase;
+  ValueFlow<float> phase;
   ValueSource<uint64_t> interrupts;
+  ValueFlow<uint32_t> rpmTarget = 100;
+  ValueFlow<uint32_t> rpmMeasured;
+  ValueFlow<int> error;
+  ValueFlow<float> proportional = 0.0, integral = 0.0, derivative = 0.0;
+  ValueFlow<float> KP = -0.01;
+  ValueFlow<float> KI = -0.01;
+  ValueFlow<float> KD = 0.0;
+  const float MAX_INTEGRAL = 5;
 };

@@ -7,7 +7,13 @@ SDA     INPUT   current sensor ACS712ELCTR
 */
 #include <driver/gpio.h>
 #include <driver/mcpwm.h>
-
+/*
+ESP32 PWM initialization
+- pinPwm : output
+- pinSync : pin for MCPWM_SYNC_0 to PWM unit
+- pwm
+- frequency : periodicity of pwm pulse
+*/
 bool pwmInit(mcpwm_unit_t mcpwmUnit, mcpwm_timer_t mcpwmTimer, int pinPwm,
              int pinSync, float pwm, uint32_t frequency) {
   INFO(" MCPWM init PCPWM[%d] TIMER[%d] pin PWM : %d, pin SYNC : %d ",
@@ -44,41 +50,14 @@ bool pwmInit(mcpwm_unit_t mcpwmUnit, mcpwm_timer_t mcpwmTimer, int pinPwm,
   return true;
 }
 
-void Triac::newZeroDetect() {
-  int32_t delta = Sys::micros() - _lastZeroDetect;
-  if (delta < 100000) {
-    _maxDelta = delta > _maxDelta ? delta : _maxDelta;
-    _minDelta = delta < _minDelta ? delta : _minDelta;
-  }
-  _lastZeroDetect = Sys::micros();
-}
-/*
-IRAM_ATTR void Triac::zeroDetected(void* pv) {
-  Triac* pTriac = (Triac*)pv;
-  pTriac->_interrupts++;
-  pTriac->newZeroDetect();
-  // pTriac->_gpioTrigger.write(1);
-  Sys::delay(5);
-  gpio_set_level((gpio_num_t)pTriac->_gpioTrigger.getPin(), 1);
-  Sys::delay(1);
-  gpio_set_level((gpio_num_t)pTriac->_gpioTrigger.getPin(), 0);
-}
-*/
 Triac::Triac(Thread& thread, Uext& uext)
     : Actor(thread),
-      _gpioZeroDetect(uext.getDigitalIn(LP_SCL)),
+      _gpioZeroDetect(uext.toPin(LP_SCL)),
+      _gpioTriac(uext.toPin(LP_TXD)),
       _adcCurrent(uext.getADC(LP_RXD)),
-      _gpioTrigger(uext.getDigitalOut(LP_TXD)),  // RXD ?
-      _measureTimer(thread, 1000, true) {
-  pwmInit(MCPWM_UNIT_0, MCPWM_TIMER_0, _gpioTrigger.getPin(),
-          _gpioZeroDetect.getPin(), 1.0, 100);
-  DigitalIn& sda = uext.getDigitalIn(LP_SDA);
-  sda.setMode(DigitalIn::DIN_NO_PULL);
-  sda.init();
-  /*
-    _gpioZeroDetect.onChange(DigitalIn::DIN_RAISE, zeroDetected, this);
-    _gpioTrigger.setMode(DigitalOut::DOUT_PULL_DOWN);
-  */
+      _measureTimer(thread, 1000, true),
+      _controlTimer(thread, 100, true) {
+  // convert phase 0-180 to 1000->0
   phase >> [](const int ph) {
     esp_err_t _rc =
         mcpwm_sync_enable(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_SELECT_SYNC0,
@@ -87,20 +66,34 @@ Triac::Triac(Thread& thread, Uext& uext)
       WARN("mcpwm_sync_enable()=%d", _rc);
     };
   };
+
+  // report measurements
   _measureTimer >> [&](const TimerMsg& tm) {
-    interrupts = _interrupts;
     current = _adcCurrent.getValue();
-    INFO(
-        "  delta zero min %d µsec,max %d µsec , interrupts : %ld current : %d ",
-        _minDelta, _maxDelta, _interrupts, current());
-    _minDelta = INT32_MAX;
-    _maxDelta = INT32_MIN;
+    INFO("   current : %d ", current());
   };
-  phase.on(170);
+
+  _controlTimer >> [&](const TimerMsg& tm) {
+    error = rpmTarget() - rpmMeasured();
+    float delta = pid(error());
+    phase.on(130.0 + delta);
+  };
 }
 
 bool Triac::init() {
+  // PWM drives directly triac with 100 Hz and 1 %  pulse width
+  pwmInit(MCPWM_UNIT_0, MCPWM_TIMER_0, _gpioTriac, _gpioZeroDetect, 1.0, 100);
+  phase.on(170);
   return _adcCurrent.init() == 0;
-  /*  return _gpioZeroDetect.init() == 0 && _gpioTrigger.init() == 0 &&
-           _adcCurrent.init() == 0;*/
+}
+
+float Triac::pid(float err) {
+  integral = integral() + (err * _interval);
+  derivative = (err - _errorPrev) / _interval;
+  float integralPart = KI() * integral();
+  if (integralPart > MAX_INTEGRAL) integral = MAX_INTEGRAL / KI();
+  if (integralPart < -MAX_INTEGRAL) integral = -MAX_INTEGRAL / KI();
+  float output = KP() * err + KI() * integral() + KD() * derivative();
+  _errorPrev = err;
+  return output;
 }
