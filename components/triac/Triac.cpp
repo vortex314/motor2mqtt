@@ -55,7 +55,7 @@ Triac::Triac(Thread& thread, Uext& uext)
       _gpioZeroDetect(uext.toPin(LP_SCL)),
       _gpioTriac(uext.toPin(LP_TXD)),
       _adcCurrent(uext.getADC(LP_RXD)),
-      _measureTimer(thread, 1000, true),
+      _measureTimer(thread, 100, true),
       _controlTimer(thread, 100, true) {
   // convert phase 0-180 to 1000->0
   phase >> [](const int ph) {

@@ -19,7 +19,6 @@ class Triac : public Actor {
   bool init();
   ValueSource<int> current;
   ValueFlow<float> phase;
-  ValueSource<uint64_t> interrupts;
   ValueFlow<uint32_t> rpmTarget = 100;
   ValueFlow<uint32_t> rpmMeasured;
   ValueFlow<int> error;

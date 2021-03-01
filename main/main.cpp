@@ -92,25 +92,20 @@ extern "C" void app_main(void) {
   mqtt.connected >> poller.connected;
   //------------------------------------------------------------------- TRIAC
   if (triac.init() && tacho.init()) {
+    uint32_t rt=500;
     INFO(" triac and tacho init succesful.");
-    triac.interrupts >> mqtt.toTopic<uint64_t>("triac/interrupts");
-    triac.current >> mqtt.toTopic<int>("triac/current");
-    tacho.rpm >> mqtt.toTopic<uint32_t>("tacho/rpm");
     tacho.rpm >> triac.rpmMeasured;
-    poller >> triac.phase;
-    mqtt.topic<float>("triac/phase") == triac.phase;
-    mqtt.topic<uint32_t>("triac/rpmTarget") == triac.rpmTarget;
-    mqtt.topic<float>("triac/KP")==triac.KP;
-    mqtt.topic<float>("triac/KI")==triac.KI;
-    mqtt.topic<float>("triac/KD")==triac.KD;
-    poller >> triac.rpmTarget;
-    poller >> triac.KP;
-    poller >> triac.KD;
-    poller >> triac.KI;
-    poller >> triac.rpmTarget;
-    triac.rpmMeasured >> mqtt.toTopic<uint32_t>("triac/rpmMeasured");
-    mqtt.topic<float>("triac/integral") == triac.integral;
-    triac.error >> mqtt.toTopic<int>("triac/error");
+  // passive properties
+    poller >> triac.rpmTarget == mqtt.topic<uint32_t>("triac/rpmTarget");
+    poller >> triac.KP == mqtt.topic<float>("triac/KP");
+    poller >> triac.KI == mqtt.topic<float>("triac/KI");
+    poller >> triac.KD == mqtt.topic<float>("triac/KD");
+  // active properties
+    triac.phase >> Cache<float>::nw(mqttThread,rt,1000) >> mqtt.topic<float>("triac/phase");
+    triac.integral >> Cache<float>::nw(mqttThread,rt,1000) >> mqtt.topic<float>("triac/integral");
+    triac.error >> Cache<int>::nw(mqttThread,rt,1000) >> mqtt.toTopic<int>("triac/error");
+    triac.rpmMeasured >> Cache<uint32_t>::nw(mqttThread,rt,1000) >> mqtt.toTopic<uint32_t>("triac/rpmMeasured");
+    triac.current >> Cache<int>::nw(mqttThread,rt,1000) >> mqtt.toTopic<int>("triac/current");
 
   } else {
     WARN(" TRIAC initialization failed. ");
